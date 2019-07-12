@@ -1,0 +1,16 @@
+DEFAULT vesamenu.c32
+TIMEOUT 3000
+ONTIMEOUT local
+PROMPT 0
+LABEL local
+    MENU Boot from local hard drive
+    LOCALBOOT 0
+LABEL bootstrap
+    KERNEL /rhcos-4.1.0-x86_64-installer-kernel 
+    APPEND ip=dhcp rd.neednet=1 initrd=/rhcos-4.1.0-x86_64-installer-initramfs.img console=tty0 console=ttyS0 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://172.16.41.244:8000/image.raw.gz coreos.inst.ignition_url=http://172.16.41.244:8000/bootstrap.ign
+LABEL master
+    KERNEL /rhcos-4.1.0-x86_64-installer-kernel 
+    APPEND ip=dhcp rd.neednet=1 initrd=/rhcos-4.1.0-x86_64-installer-initramfs.img console=tty0 console=ttyS0 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://172.16.41.244:8000/image.raw.gz coreos.inst.ignition_url=http://172.16.41.244:8000/master.ign
+LABEL worker
+    KERNEL /rhcos-4.1.0-x86_64-installer-kernel 
+    APPEND ip=dhcp rd.neednet=1 initrd=/rhcos-4.1.0-x86_64-installer-initramfs.img console=tty0 console=ttyS0 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://172.16.41.244:8000/image.raw.gz coreos.inst.ignition_url=http://172.16.41.244:8000/worker.ign

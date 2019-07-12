@@ -1,0 +1,8 @@
+[Unit]
+Description=Tftp Server Activation Socket
+
+[Socket]
+ListenDatagram=172.16.41.244:69
+
+[Install]
+WantedBy=sockets.target

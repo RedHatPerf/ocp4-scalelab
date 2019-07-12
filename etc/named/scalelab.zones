@@ -1,0 +1,5 @@
+zone "cloud31.scalelab" IN {
+	type master;
+	file "/etc/named/cloud31.zone";
+	allow-update { none; };
+};

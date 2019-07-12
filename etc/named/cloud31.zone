@@ -1,0 +1,22 @@
+$TTL 3600
+@ IN SOA cloud31.scalelab. root.scalelab. (
+2019070201  ;Serial
+3600        ;Refresh
+1800        ;Retry
+0           ;Expire
+0           ;Minimum TTL
+)
+
+ 	IN NS primary.cloud31.scalelab.
+primary	IN A 172.16.41.244
+bootstrap-0 IN A 172.16.0.254
+api	IN A 172.16.41.244
+api-int IN A 172.16.41.244
+*.apps  IN A 172.16.41.244
+etcd-0	IN A 172.16.0.1
+etcd-1	IN A 172.16.0.2
+etcd-2	IN A 172.16.0.3
+_etcd-server-ssl._tcp	86400 IN    SRV 0        10     2380 etcd-0
+_etcd-server-ssl._tcp	86400 IN    SRV 0        10     2380 etcd-1
+_etcd-server-ssl._tcp	86400 IN    SRV 0        10     2380 etcd-2
+
