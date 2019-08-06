@@ -8,15 +8,14 @@ $TTL 3600
 )
 
  	IN NS primary.cloud31.scalelab.
-primary	IN A 172.16.41.244
+primary	IN A BASTION_IP
 bootstrap-0 IN A 172.16.0.254
-api	IN A 172.16.41.244
-api-int IN A 172.16.41.244
-*.apps  IN A 172.16.41.244
+api	IN A BASTION_IP
+api-int IN A BASTION_IP
+*.apps  IN A BASTION_IP
 etcd-0	IN A 172.16.0.1
 etcd-1	IN A 172.16.0.2
 etcd-2	IN A 172.16.0.3
 _etcd-server-ssl._tcp	86400 IN    SRV 0        10     2380 etcd-0
 _etcd-server-ssl._tcp	86400 IN    SRV 0        10     2380 etcd-1
 _etcd-server-ssl._tcp	86400 IN    SRV 0        10     2380 etcd-2
-

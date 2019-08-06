@@ -2,6 +2,8 @@
 
 The setup requires coporate DHCP on public interfaces (10.x.x.x) not seeding the domain nameservers. This should be eventually avoided when [RFE-240](https://jira.coreos.com/browse/RFE-240) gets incorporated.
 
+TODO: From my experience the major problem following this tutorial is replacing all IPs and names correctly. The customization should be templated.
+
 ## Local machine setup
 
 The steps below basically follow the [bare-metal install guide](https://docs.openshift.com/container-platform/4.1/installing/installing_bare_metal/installing-bare-metal.html#installation-operators-config_installing-bare-metal):
@@ -39,6 +41,14 @@ yum install -y bind dhcp haproxy tftp-server
 Ssh into the other nodes used for Openshift nodes and record MAC addreses. I have used the `p2p3` interface (`172.16.x.x`) for all the tasks (alternatively in iDRAC see Hardware/Network Devices/NIC slot 2/Port 3).
 On the bastion node (we won't reset IP for that) record the internal IP on the same iface (`172.16.41.244` in all the present configuration files).
 
+```
+for host in `curl -s http://wiki.rdu2.scalelab.redhat.com | html2text -b 0 | grep -e 'rvansa' | cut -f 2 -d '|'  | tr -d ' '`; do
+    echo -ne "host $host {\n\thardware ethernet "
+    sshpass -p 100yard- ssh root@${host}.rdu2.scalelab.redhat.com -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ip link show p2p3 2> /dev/null | tail -n 1 | sed 's/.*ether \([^ ]*\) .*/\1/' | tr -d '\n'
+    echo -e ";\n\tfixed-address 172.16.0.x;\n}\n"
+done
+```
+
 Copy all the files in this repository in the appropriate places, replacing the IP above with bastion node's IP. You can also replace the assignment name `cloud31` by yours. Start the DNS and verify that it serves:
 
 ```
@@ -52,9 +62,16 @@ Update `/etc/dhcp/dhcpd.conf` to map MAC addresses to desired IPs (`172.16.0.254
 
 Download [rhcos-4.1.0-x86_64-installer-initramfs.img](https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/4.1.0/rhcos-4.1.0-x86_64-installer-initramfs.img) and [rhcos-4.1.0-x86_64-installer-kernel](https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/4.1.0/rhcos-4.1.0-x86_64-installer-kernel) and place these into `/var/lib/tftpboot/`.
 
-Start DHCP, HAProxy and TFTP (for PXE boot)
+```
+cd /var/lib/tftpboot
+wget https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/4.1.0/rhcos-4.1.0-x86_64-installer-initramfs.img
+wget https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/4.1.0/rhcos-4.1.0-x86_64-installer-kernel
+```
+
+Start DHCP, HAProxy and TFTP (for PXE boot), and disable iptables which could interfere with those:
 ```
 systemctl start dhcpd tftp haproxy
+systemctl stop iptables
 ```
 
 At this point the HAProxy points to non-existent nodes so we cannot verify the HAProxy setup.
@@ -71,7 +88,9 @@ python -m SimpleHTTPServer &
 
 Enter management interface (login `quads` / your-ticket-id = `123456`) and open console. Depending on iDRAC version it either opens new window or you need to use `javaws` from Oracle JRE. Then reboot the machine.
 
-SCALE lab nodes boot from PXE by default, but I had mixed luck selecting them to boot from the correct NIC. If you're not lucky just map the virtual DVD drive to [rhcos-4.1.0-x86_64-installer.iso](https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/4.1.0/rhcos-4.1.0-x86_64-installer.iso). Then, when you're prompted to start the installation add these parameters to the kernel (replace the IP and ignition config as needed):
+SCALE lab nodes boot from PXE by default, but I had mixed luck selecting them to boot from the correct NIC. Hitting PXE boot (F12) in the early screen and then selecting socket `Slot 2 IBA 40G Slot 4202 v1031` in the NIC menu worked best. Alternatively when you enter Grub command line and type `exit` it sometimes finds the correct TFTP.
+
+If you're not lucky just map the virtual DVD drive to [rhcos-4.1.0-x86_64-installer.iso](https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/4.1.0/rhcos-4.1.0-x86_64-installer.iso). Then, when you're prompted to start the installation add these parameters to the kernel (replace the IP and ignition config as needed):
 
 ```
 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://172.16.41.244:8000/rhcos-4.1.0-x86_64-metal-bios.raw.gz coreos.inst.ignition_url=http://172.16.41.244:8000/bootstrap.ign
@@ -133,6 +152,8 @@ oc adm certificate approve `oc get csr -o name`
 
 A while after this finishes you should see them up in `oc get node`.
 
+If you don't see the `csr`s, install worker again. Possibly once more. You'll get lucky, eventually.
+
 It's possible to install further workers using the same approach even after the 24-hour certificate expiration limit the documentation mentions; that's probably limiting only the master bootstrap (make sure the bootstrap node is down when installing workers after the limit).
 
 I haven't tested [adding RHEL workers](https://docs.openshift.com/container-platform/4.1/machine_management/adding-rhel-compute.html) yet.
@@ -159,6 +180,17 @@ If all cluster operators are running the installation is complete; verify that f
 Maistra installed without issues in my case, following [install guide](https://maistra.io/docs/getting_started/install/). I have used the `base-install` control plane config, only setting `ior_enabled: true`. To my surprise wildcard routes are not supported in OCP 4.1 at all.
 
 However when scaling the load I started having issues with `ingressgateway` running out of memory and crashing therefore; increase heap limits to 2GB.
+
+## Setting up client machines
+
+Install necessary packages:
+```
+yum install -y java unzip
+```
+
+Add your DNS to `/etc/resolv.conf` and `chattr +i /etc/resolv.conf` (or use some cleaner way to prevent dhcpclient from updating it).
+
+
 
 ## Links
 
