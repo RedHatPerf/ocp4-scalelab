@@ -74,6 +74,8 @@ systemctl start dhcpd tftp haproxy
 systemctl stop iptables
 ```
 
+When verifying TFTP setup don't forget that firewall is likely to block this on client side, too.
+
 At this point the HAProxy points to non-existent nodes so we cannot verify the HAProxy setup.
 
 Bastion node will serve the ignition configs you've created before and RHCOS image. Create a new directory in /root/ and copy the `*.ign` files in there. Also download [rhcos-4.1.0-x86_64-metal-bios.raw.gz](https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/latest/rhcos-4.1.0-x86_64-metal-bios.raw.gz) there.
@@ -201,3 +203,61 @@ I've gathered some info regarding UPI installs during my efforts:
 * https://github.com/e-minguez/ocp4-upi-bm-pxeless-staticips/
     * Setting static IPs and DNS does not work for me, though; on masters & workers the ignition config provided during installation is mostly ignored, only the bootstrap api URL matters. (Could be worth replacing the URL when DHCP changes are not possible, but I don't know what else will break in later installation stages).
 * https://access.redhat.com/solutions/4175151
+
+
+## Virtualized master installation
+
+First setup bridge network on the host OS:
+```
+# /etc/sysconfig/network-scripts/ifcfg-br0
+DEVICE=br0
+TYPE=Bridge
+IPADDR=192.168.0.20
+NETMASK=255.255.255.0
+GATEWAY=192.168.0.1
+DNS=192.168.0.70
+ONBOOT=yes
+BOOTPROTO=static
+DELAY=0
+```
+```
+/etc/sysconfig/network-scripts/ifcfg-ens1f0np0
+TYPE=Ethernet
+PROXY_METHOD=none
+BROWSER_ONLY=no
+BOOTPROTO=static
+DEFROUTE=no
+IPV4_FAILURE_FATAL=no
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=no
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+NAME=ens1f0np0
+UUID=cf60174f-4d21-4023-a9c5-f95c52cba601
+DEVICE=ens1f0np0
+ONBOOT=no
+BRIDGE=br0
+```
+
+Run `ifdown ens1f0np0 && ifup br0 && ifup ens1f0np0` and make sure that you can ping the bridge IP from outside and ping other machines (e.g. the DNS) from host machine.
+
+Then setup DNS entries, including reverse DNS lookup. In case you are mixing virtualized and non-virtualized nodes with multiple NICs make sure that the reverse lookup will point to the IP assigned to NIC which should host the intra-cluster traffic.
+
+Add `option host-name "xxx"` to DHCP so that machines have their hostnames set up correctly (for multiple NICs, use this option everywhere). The virtualized nodes also need `option routers 192.168.0.xxx` to add default route; otherwise the nodes could not reach internet to download images. However the non-virtualized nodes which should probably reach internet through a pub interface and communicate using private interface *must not* have this option set.
+If you're setting DHCP on the public interface consider using `deny unknown-clients` to not behave as a rogue DHCP server.
+
+In order to reach Internet from the virtual machines we need to perform a NAT translation; assuming the host OS is RHEL8 with firewalld, start it and add a rule for each virtual machine:
+
+```bash
+firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=192.168.0.xxx masquerade'
+firewall-cmd --reload
+```
+
+When the fake MAC addresses are set in DHCP you can install the virtual machines. Note that disk will be called `/dev/vda`; you can adjust parameters in PXE config or the interactive installer will ask you to reselect.
+
+```
+virt-install --virt-type=kvm --name=ocp4.1-bootstrap --ram=32768 --vcpus=4 --pxe --network=bridge=br0,model=virtio,mac=06:11:11:11:11:00 --graphics vnc --disk path=/var/lib/libvirt/images/bootstrap.qcow2,size=20,bus=virtio,format=qcow2
+```
+
+This opens VNC on port `5900` (and subsequent for the other machines).
