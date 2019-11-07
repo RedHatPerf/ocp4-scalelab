@@ -21,9 +21,9 @@ Place the pull secret and your public key into `install-config.yaml`; change rep
 Create a new directory and copy the updated `install-config.yaml` in there. Then run `openshift-installer`:
 
 ```
-mkdir cloud31
-cp install-config.yaml cloud31/
-./openshift-install create ignition-configs --dir cloud31 --log-level debug
+mkdir cloud
+cp install-config.yaml cloud/
+./openshift-install create ignition-configs --dir cloud --log-level debug
 ```
 
 The created directory should contain `bootstrap.ign`, `master.ign` and `worker.ign`.
@@ -49,7 +49,7 @@ for host in `curl -s http://wiki.rdu2.scalelab.redhat.com | html2text -b 0 | gre
 done
 ```
 
-Copy all the files in this repository in the appropriate places, replacing the IP above with bastion node's IP. You can also replace the assignment name `cloud31` by yours. Start the DNS and verify that it serves:
+Copy all the files in this repository in the appropriate places, replacing the IP above with bastion node's IP. You can also replace the assignment name `cloud` by yours. Start the DNS and verify that it serves:
 
 ```
 systemctl start named
@@ -105,7 +105,7 @@ Here's a checklist:
 
 1. `/etc/resolv.conf` contains just the bastion node IP (`172.16.x.x`)
 2. `ifconfig` confirms that this node has IP `172.16.0.254` on the `p2p3` interface
-3. `curl -k https://api-int.cloud31.scalelab:22623/config/master` returns ugly long JSON
+3. `curl -k https://api-int.cloud.scalelab:22623/config/master` returns ugly long JSON
 
 You can check `journalctl -e -u bootkube` but it should report the `etcd`s to be unreachable now.
 
@@ -131,7 +131,7 @@ systemctl restart rsyslog
 When master is correctly installed, you should see succesful confirmation in `journalctl -e -u bootkube` on the bootstrap node. After all masters are up, verify from your local machine that boostrap is completed:
 
 ```
-./openshift-install wait-for bootstrap-complete --dir cloud31 --log-level debug
+./openshift-install wait-for bootstrap-complete --dir cloud --log-level debug
 ```
 
 You can shutdown/repurpose the bootstrap node now as the log suggests.
@@ -139,7 +139,7 @@ You can shutdown/repurpose the bootstrap node now as the log suggests.
 Verify that you can contact the apiserver (from your local machine) and see the machines:
 
 ```
-alias oc=`pwd`/oc --config `pwd`/cloud31/auth/kubeconfig
+alias oc=`pwd`/oc --config `pwd`/cloud/auth/kubeconfig
 oc whoami # should return system:admin
 oc get nodes
 ```
@@ -164,7 +164,7 @@ I haven't tested [adding RHEL workers](https://docs.openshift.com/container-plat
 
 Configure the storage for image-registry [as the docs says](https://docs.openshift.com/container-platform/4.1/installing/installing_bare_metal/installing-bare-metal.html#installation-registry-storage-non-production_installing-bare-metal) (or `oc edit configs.imageregistry.operator.openshift.io cluster` and set the `spec.storage.emptyDir: {}` manually).
 
-I had some other operators degraded (`oc get clusteroperator` or `oc get co`) after boot because some routes in `*.apps.cloud31.scalelab` were not reachable (due to misconfiguration). The routers should be up and running on worker nodes and HAProxy should point to these machines. Check out what's happening there if you have trouble:
+I had some other operators degraded (`oc get clusteroperator` or `oc get co`) after boot because some routes in `*.apps.cloud.scalelab` were not reachable (due to misconfiguration). The routers should be up and running on worker nodes and HAProxy should point to these machines. Check out what's happening there if you have trouble:
 
 ```
 oc project openshift-ingress
@@ -174,7 +174,7 @@ oc get po
 If all cluster operators are running the installation is complete; verify that from your local machine running
 
 ```
-./openshift-install wait-for install-complete --dir cloud31 --log-level debug
+./openshift-install wait-for install-complete --dir cloud --log-level debug
 ```
 
 ## Istio

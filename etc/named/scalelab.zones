@@ -1,5 +1,5 @@
-zone "cloud31.scalelab" IN {
+zone "cloud.scalelab" IN {
 	type master;
-	file "/etc/named/cloud31.zone";
+	file "/etc/named/cloud.zone";
 	allow-update { none; };
 };

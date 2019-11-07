@@ -1,5 +1,5 @@
 $TTL 3600
-@ IN SOA cloud31.scalelab. root.scalelab. (
+@ IN SOA cloud.scalelab. root.scalelab. (
 2019070201  ;Serial
 3600        ;Refresh
 1800        ;Retry
@@ -7,7 +7,7 @@ $TTL 3600
 0           ;Minimum TTL
 )
 
- 	IN NS primary.cloud31.scalelab.
+ 	IN NS primary.cloud.scalelab.
 primary	IN A BASTION_IP
 bootstrap-0 IN A 172.16.0.254
 api	IN A BASTION_IP
