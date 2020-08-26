@@ -1,3 +1,7 @@
+
+# OCP 4.x JetSki IPI install steps
+Check the [jetski.md](JETSKI.md) markdown for instructions
+
 # OCP 4.x bare-metal install guide in SCALE lab
 
 The setup requires coporate DHCP on public interfaces (10.x.x.x) not seeding the domain nameservers. This should be eventually avoided when [RFE-240](https://jira.coreos.com/browse/RFE-240) gets incorporated.
