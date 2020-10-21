@@ -187,6 +187,10 @@ Maistra installed without issues in my case, following [install guide](https://m
 
 However when scaling the load I started having issues with `ingressgateway` running out of memory and crashing therefore; increase heap limits to 2GB.
 
+Upstream can be installed based on the docs (don't forget to [do the platform setup](https://istio.io/docs/setup/kubernetes/platform-setup/openshift/) ) but the proxy-init containers don't work on RHCOS nodes; I had to replace the upstream ones with `docker.io/maistra/proxy-init-ubi8:0.12.0`. Since this only sets up firewalling rules it should not have an effect on benchmark (besides the intrinsic effect of running on RHCOS).
+
+Also, for reproducible results it's better to disable the `horizontalpodautoscaler` (enabled by default in production installation) and scale `istio-ingressgateway` manually.
+
 ## Setting up client machines
 
 Install necessary packages:
@@ -207,7 +211,6 @@ I've gathered some info regarding UPI installs during my efforts:
 * https://github.com/e-minguez/ocp4-upi-bm-pxeless-staticips/
     * Setting static IPs and DNS does not work for me, though; on masters & workers the ignition config provided during installation is mostly ignored, only the bootstrap api URL matters. (Could be worth replacing the URL when DHCP changes are not possible, but I don't know what else will break in later installation stages).
 * https://access.redhat.com/solutions/4175151
-
 
 ## Virtualized master installation
 
@@ -251,17 +254,68 @@ Then setup DNS entries, including reverse DNS lookup. In case you are mixing vir
 Add `option host-name "xxx"` to DHCP so that machines have their hostnames set up correctly (for multiple NICs, use this option everywhere). The virtualized nodes also need `option routers 192.168.0.xxx` to add default route; otherwise the nodes could not reach internet to download images. However the non-virtualized nodes which should probably reach internet through a pub interface and communicate using private interface *must not* have this option set.
 If you're setting DHCP on the public interface consider using `deny unknown-clients` to not behave as a rogue DHCP server.
 
+<del>
 In order to reach Internet from the virtual machines we need to perform a NAT translation; assuming the host OS is RHEL8 with firewalld, start it and add a rule for each virtual machine:
 
 ```bash
 firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=192.168.0.xxx masquerade'
 firewall-cmd --reload
 ```
+</del>
 
-When the fake MAC addresses are set in DHCP you can install the virtual machines. Note that disk will be called `/dev/vda`; you can adjust parameters in PXE config or the interactive installer will ask you to reselect.
+In order to let virtual nodes reach public internet we need to setup another interface (adding the NAT as above does not work anymore). For that we need to add second interface to the virtual nodes; we have to configure IPs, hostnames and disable default DNS setup: run `virsh net-edit default` and add this configuration:
+```xml
+<network>
+  <name>default</name>
+  <uuid><!-- do not change the UUID! --></uuid>
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='virbr0' stp='on' delay='0'/>
+  <mac address='52:54:00:f3:02:f0'/>
+  <dns enable='no'/> <!-- This is important -->
+  <ip address='192.168.122.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.122.2' end='192.168.122.254'/>
+      <host mac='00:11:22:33:55:01' name='master1' ip='192.168.122.21'/>
+      <host mac='00:11:22:33:55:02' name='master2' ip='192.168.122.22'/>
+      <host mac='00:11:22:33:55:03' name='master3' ip='192.168.122.23'/>
+    </dhcp>
+  </ip>
+</network>
+```
+
+To apply this configuration to the network run
+
+```bash
+virsh net-destroy default && virsh net-start default
+```
+
+When everything is set up you can install the virtual machines. Note that disk will be called `/dev/vda`; you can adjust parameters in PXE config or the interactive installer will ask you to reselect.
 
 ```
-virt-install --virt-type=kvm --name=ocp4.1-bootstrap --ram=32768 --vcpus=4 --pxe --network=bridge=br0,model=virtio,mac=06:11:11:11:11:00 --graphics vnc --disk path=/var/lib/libvirt/images/bootstrap.qcow2,size=20,bus=virtio,format=qcow2
+virt-install --virt-type=kvm --name=bootstrap --ram=32768 --vcpus=4 --pxe --network=bridge=br0,model=virtio,mac=06:11:11:11:11:00 --graphics vnc --disk path=/var/lib/libvirt/images/bootstrap.qcow2,size=20,bus=virtio,format=qcow2
 ```
 
 This opens VNC on port `5900` (and subsequent for the other machines).
+
+Note that the command above does not add the public-facing interface; to add it run
+
+```bash
+virsh attach-interface --domain ocp45-master1 --live --config --type network --source default --mac 00:11:22:33:55:01
+```
+
+Should you need to amend the network configuration with another host record, you can use
+
+```bash
+virsh net-update default add-last ip-dhcp-host '<host mac="00:11:22:33:55:04" ip="192.168.122.24" name="othernode1" />' --live --config
+```
+
+Note that it's possible to add that using `virsh net-edit default`, too, however changes will apply only after `virsh net-destroy default && virsh net-start default`. And there's one more caveat: It seems that the network interfaces won't be functional after network restart, you need to manually remove & add the interfaces:
+
+```bash
+virsh detach-interface ocp45-master1 network --live
+virsh attach-interface --domain ocp45-master1 --live --config --type network --source default --mac 00:11:22:33:55:01
+```
