@@ -1,0 +1,10 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: increase-log-size 
+spec:
+  machineConfigPoolSelector:
+    matchLabels:
+      increased-log-size: enabled 
+  kubeletConfig: 
+    containerLogMaxSize: 250Mi
